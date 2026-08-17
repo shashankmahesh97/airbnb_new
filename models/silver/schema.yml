@@ -28,7 +28,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['completed', 'confirmed', 'cancelled', 'pending', 'unknown']
+                values: ['completed', 'confirmed', 'pending', 'unknown']
       - name: currency
         description: ISO code. Must exist in the FX dimension or revenue cannot be converted.
         tests:
