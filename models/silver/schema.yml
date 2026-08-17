@@ -1,0 +1,125 @@
+version: 2
+
+models:
+
+  - name: silver_bookings
+    description: >
+      Cleaned bookings, one row per booking_id. The source carries update history
+      (multiple rows per booking); the latest updated_at survives. Rows failing
+      basic stay validity are flagged via is_valid_stay rather than dropped, so
+      the defect rate stays measurable. Incremental with a 3-day lookback window
+      to absorb late-arriving records.
+    columns:
+      - name: booking_id
+        description: Natural key. Unique after deduplication.
+        tests: [unique, not_null]
+      - name: listing_id
+        description: FK to silver_listings. Some source rows reference listings that do not exist.
+        tests: [not_null]
+      - name: guest_id
+        description: FK to silver_guests. Nullable - some bookings arrive unlinked.
+      - name: host_id
+        tests: [not_null]
+      - name: booking_date
+        tests: [not_null]
+      - name: booking_status
+        description: Normalised to four canonical values by clean_booking_status.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['completed', 'confirmed', 'cancelled', 'pending', 'unknown']
+      - name: currency
+        description: ISO code. Must exist in the FX dimension or revenue cannot be converted.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('silver_fx_rates')
+                field: currency_code
+      - name: is_valid_stay
+        description: False when nights <= 0, gross <= 0, or checkout precedes checkin.
+        tests: [not_null]
+      - name: updated_at
+        description: Incremental watermark.
+        tests: [not_null]
+
+  - name: silver_listings
+    description: Cleaned listings, one row per listing_id (current state).
+    columns:
+      - name: listing_id
+        tests: [unique, not_null]
+      - name: host_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('silver_hosts')
+                field: host_id
+      - name: price_per_night
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+  - name: silver_hosts
+    description: Cleaned hosts, one row per host_id. Email hashed for safe joining.
+    columns:
+      - name: host_id
+        tests: [unique, not_null]
+      - name: response_rate
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+
+  - name: silver_guests
+    description: >
+      Cleaned guests, one row per guest_id. Full card numbers stop at bronze -
+      only the last four digits and a SHA-256 hash pass through. Date of birth is
+      generalised to age bands for downstream use.
+    columns:
+      - name: guest_id
+        tests: [unique, not_null]
+      - name: email
+        description: Nullable. Duplicate addresses exist and are not resolved here.
+      - name: age_band
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['18-24', '25-34', '35-44', '45-54', '55+', 'unknown']
+
+  - name: silver_reviews
+    description: >
+      Cleaned reviews, one row per review_id. Note the grain - a booking can have
+      more than one review, so this is NOT 1:1 with silver_bookings.
+    columns:
+      - name: review_id
+        tests: [unique, not_null]
+      - name: booking_id
+        tests: [not_null]
+      - name: rating_overall
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 5
+
+  - name: silver_fx_rates
+    description: Monthly currency conversion rates to USD. Conformed dimension.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [currency_code, rate_month]
+    columns:
+      - name: currency_code
+        tests: [not_null]
+      - name: rate_month
+        tests: [not_null]
+      - name: rate_to_usd
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"

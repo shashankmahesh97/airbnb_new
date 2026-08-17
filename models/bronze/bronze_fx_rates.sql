@@ -1,0 +1,1 @@
+select * from {{ source('staging', 'fx_rates') }}

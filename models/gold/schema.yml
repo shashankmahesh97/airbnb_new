@@ -1,0 +1,92 @@
+version: 2
+
+models:
+
+  - name: dim_date
+    description: Conformed date dimension, 2023-2026, generated from a date spine.
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+
+  - name: dim_listing
+    description: >
+      SCD Type 2 listing dimension built from listings_snapshot. One row per
+      listing per version. Includes a -1 unknown member so the fact table never
+      loses rows to a failed join.
+    columns:
+      - name: listing_key
+        description: Surrogate key - hash of listing_id and valid_from.
+        tests: [unique, not_null]
+      - name: listing_id
+        tests: [not_null]
+      - name: is_current
+        tests: [not_null]
+
+  - name: dim_host
+    columns:
+      - name: host_key
+        tests: [unique, not_null]
+      - name: host_id
+        tests: [unique, not_null]
+
+  - name: dim_guest
+    description: Guest dimension. Carries age_band and country only - no raw PII.
+    columns:
+      - name: guest_key
+        tests: [unique, not_null]
+      - name: guest_id
+        tests: [unique, not_null]
+
+  - name: fct_bookings
+    description: >
+      Transactional fact, one row per valid booking. Dimensions are joined
+      point-in-time: a booking links to the listing version live on its booking
+      date. net_revenue_usd is the headline metric - booking value converted to
+      USD at the booking month's rate, counted only for completed and confirmed
+      bookings.
+    columns:
+      - name: booking_id
+        tests: [unique, not_null]
+      - name: listing_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_listing')
+                field: listing_key
+      - name: host_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_host')
+                field: host_key
+      - name: guest_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_guest')
+                field: guest_key
+      - name: date_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: net_revenue_usd
+        description: Zero for cancelled and pending bookings by definition.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: is_missing_fx_rate
+        description: True when no FX rate existed for the currency and month.
+
+  - name: obt_bookings_revenue
+    description: Flattened star schema for the BI tool. One row per booking.
+    columns:
+      - name: booking_id
+        tests: [unique, not_null]
