@@ -1,0 +1,63 @@
+name: dbt Deploy
+
+# Runs when a pull request merges into main, and on a nightly schedule.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 02:00 UTC daily
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  DBT_PROFILES_DIR: ./ci
+  SNOWFLAKE_ACCOUNT:   ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER:      ${{ secrets.SNOWFLAKE_PROD_USER }}
+  SNOWFLAKE_PASSWORD:  ${{ secrets.SNOWFLAKE_PROD_PASSWORD }}
+  SNOWFLAKE_ROLE:      ACCOUNTADMIN
+  SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+  SNOWFLAKE_DATABASE:  AIRBNB
+
+jobs:
+  deploy:
+    name: Build production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dbt
+        run: |
+          pip install --upgrade pip
+          pip install dbt-core dbt-snowflake
+
+      - run: dbt deps
+
+      # Snapshots first: dimensions must capture today's state before the
+      # models that read from them run.
+      - name: Run snapshots
+        run: dbt snapshot --target prod
+
+      - name: Build models and run tests
+        run: dbt build --target prod --exclude resource_type:snapshot
+
+      - name: Generate docs
+        if: always()
+        run: dbt docs generate --target prod
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-prod-run-${{ github.run_number }}
+          path: target/
+          retention-days: 30

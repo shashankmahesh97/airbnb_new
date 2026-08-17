@@ -2,8 +2,7 @@
 
 {{
     config(
-        target_database = target.database,
-        target_schema   = target.schema ~ '_snapshots',
+        target_schema = 'snapshots',
         unique_key    = 'listing_id',
         strategy      = 'timestamp',
         updated_at    = 'updated_at',
