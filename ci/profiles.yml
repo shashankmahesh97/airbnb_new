@@ -1,0 +1,32 @@
+# profiles.yml for CI — no secrets in this file, only env var references.
+# Commit this. The actual values live in GitHub repository secrets.
+
+aws_dbt_snowflake_project:
+  target: ci
+  outputs:
+
+    ci:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      # Each pull request builds into its own schema, e.g. pr_42
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+      threads: 4
+      client_session_keep_alive: false
+      query_tag: dbt_ci
+
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      schema: analytics
+      threads: 8
+      query_tag: dbt_prod
