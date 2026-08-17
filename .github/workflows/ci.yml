@@ -82,6 +82,11 @@ jobs:
       - name: Install dbt
         run: pip install dbt-core dbt-snowflake
 
+      # This job runs on a fresh machine, so packages must be installed again
+      # before any dbt command that parses the project.
+      - name: Install dbt packages
+        run: dbt deps
+
       - name: Drop schema
         run: |
           dbt run-operation drop_ci_schema \
