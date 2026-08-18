@@ -6,3 +6,4 @@ dbt_internal_packages/
 .venv/
 .DS_Store
 /profiles.yml
+.venv-dbt/
