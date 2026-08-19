@@ -41,12 +41,7 @@ versions as (
         currency,
         is_active,
 
-        /*
-            The first version of each listing is backdated to 1900-01-01.
-            Otherwise dbt_valid_from is when the snapshot first ran, so any
-            booking predating that falls outside every date range and loses
-            its attribution.
-        */
+        
         case
             when version_number = 1 then cast('1900-01-01' as date)
             else cast(dbt_valid_from as date)
